@@ -1,0 +1,256 @@
+Project estoque_facil {
+  database_type: "MySQL"
+  Note: "Modelo lógico do Estoque Fácil, derivado de src/database/mysql_schema.sql"
+}
+
+Table usuarios {
+  id bigint [pk, increment]
+  nome varchar(120) [not null]
+  email varchar(160) [not null, unique]
+  senha_hash varchar(255) [not null]
+  perfil enum [not null, default: "operador", note: "admin, gerente, operador, cozinha"]
+  ativo boolean [not null, default: true]
+  criado_em timestamp [not null]
+  atualizado_em timestamp [not null]
+}
+
+Table unidades {
+  id bigint [pk, increment]
+  nome varchar(80) [not null]
+  sigla varchar(12) [not null, unique]
+  criado_em timestamp [not null]
+  atualizado_em timestamp [not null]
+}
+
+Table categorias {
+  id bigint [pk, increment]
+  nome varchar(120) [not null, unique]
+  tipo enum [not null, default: "produto", note: "produto, ingrediente"]
+  ativo boolean [not null, default: true]
+  criado_em timestamp [not null]
+  atualizado_em timestamp [not null]
+}
+
+Table fornecedores {
+  id bigint [pk, increment]
+  nome_empresa varchar(160) [not null]
+  nome_contato varchar(120)
+  cnpj varchar(24)
+  telefone varchar(32)
+  email varchar(160)
+  endereco varchar(255)
+  ativo boolean [not null, default: true]
+  criado_em timestamp [not null]
+  atualizado_em timestamp [not null]
+}
+
+Table ingredientes {
+  id bigint [pk, increment]
+  nome varchar(140) [not null]
+  unidade_id bigint
+  fornecedor_id bigint
+  custo_por_unidade decimal(12,2) [not null, default: 0]
+  estoque_minimo decimal(12,3) [not null, default: 0]
+  ativo boolean [not null, default: true]
+  criado_em timestamp [not null]
+  atualizado_em timestamp [not null]
+}
+
+Table produtos {
+  id bigint [pk, increment]
+  categoria_id bigint
+  nome varchar(160) [not null]
+  codigo varchar(60) [unique]
+  descricao text
+  imagem_url varchar(255)
+  preco_venda decimal(12,2) [not null, default: 0]
+  custo_total decimal(12,2) [not null, default: 0]
+  margem_lucro decimal(12,2) [not null, default: 0]
+  ativo boolean [not null, default: true]
+  criado_em timestamp [not null]
+  atualizado_em timestamp [not null]
+}
+
+Table itens_receita {
+  id bigint [pk, increment]
+  produto_id bigint [not null]
+  ingrediente_id bigint [not null]
+  quantidade decimal(12,3) [not null]
+  custo_unitario decimal(12,2) [not null, default: 0]
+  custo_total decimal(12,2) [not null, default: 0]
+  criado_em timestamp [not null]
+  atualizado_em timestamp [not null]
+}
+
+Table lotes_estoque {
+  id bigint [pk, increment]
+  ingrediente_id bigint [not null]
+  fornecedor_id bigint
+  codigo varchar(80)
+  quantidade decimal(12,3) [not null, default: 0]
+  custo_unitario decimal(12,2) [not null, default: 0]
+  recebido_em date
+  vence_em date
+  criado_em timestamp [not null]
+  atualizado_em timestamp [not null]
+}
+
+Table movimentacoes_estoque {
+  id bigint [pk, increment]
+  ingrediente_id bigint [not null]
+  lote_id bigint
+  tipo enum [not null, note: "entrada, saida, ajuste, perda"]
+  quantidade decimal(12,3) [not null]
+  motivo varchar(255)
+  referencia_tipo varchar(60)
+  referencia_id bigint
+  criado_por bigint
+  criado_em timestamp [not null]
+  atualizado_em timestamp [not null]
+}
+
+Table mesas {
+  id bigint [pk, increment]
+  numero varchar(20) [not null, unique]
+  status enum [not null, default: "disponivel", note: "disponivel, atendimento, reserva, indisponivel"]
+  lugares int [default: 4]
+  criado_em timestamp [not null]
+  atualizado_em timestamp [not null]
+}
+
+Table pedidos {
+  id bigint [pk, increment]
+  mesa_id bigint
+  nome_cliente varchar(140)
+  status enum [not null, default: "aberto", note: "aberto, preparo, pronto, fechado, cancelado"]
+  subtotal decimal(12,2) [not null, default: 0]
+  taxa_atendimento decimal(12,2) [not null, default: 0]
+  desconto decimal(12,2) [not null, default: 0]
+  total decimal(12,2) [not null, default: 0]
+  criado_por bigint
+  criado_em timestamp [not null]
+  atualizado_em timestamp [not null]
+  fechado_em datetime
+}
+
+Table itens_pedido {
+  id bigint [pk, increment]
+  pedido_id bigint [not null]
+  produto_id bigint
+  nome varchar(160) [not null]
+  quantidade int [not null, default: 1]
+  preco_unitario decimal(12,2) [not null, default: 0]
+  total decimal(12,2) [not null, default: 0]
+  observacoes text
+  status_cozinha enum [not null, default: "recebido", note: "recebido, preparo, pronto, entregue, cancelado"]
+  criado_em timestamp [not null]
+  atualizado_em timestamp [not null]
+}
+
+Table adicionais_item_pedido {
+  id bigint [pk, increment]
+  item_pedido_id bigint [not null]
+  nome varchar(140) [not null]
+  preco decimal(12,2) [not null, default: 0]
+  criado_em timestamp [not null]
+  atualizado_em timestamp [not null]
+}
+
+Table caixas {
+  id bigint [pk, increment]
+  aberto_por bigint
+  fechado_por bigint
+  valor_abertura decimal(12,2) [not null, default: 0]
+  valor_fechamento decimal(12,2)
+  status enum [not null, default: "aberto", note: "aberto, fechado"]
+  aberto_em timestamp [not null]
+  fechado_em datetime
+  atualizado_em timestamp [not null]
+}
+
+Table vendas {
+  id bigint [pk, increment]
+  pedido_id bigint
+  caixa_id bigint
+  subtotal decimal(12,2) [not null, default: 0]
+  taxa_atendimento decimal(12,2) [not null, default: 0]
+  desconto decimal(12,2) [not null, default: 0]
+  total decimal(12,2) [not null, default: 0]
+  vendido_por bigint
+  vendido_em timestamp [not null]
+  atualizado_em timestamp [not null]
+}
+
+Table pagamentos {
+  id bigint [pk, increment]
+  venda_id bigint
+  pedido_id bigint
+  forma enum [not null, note: "pix, credito, debito, dinheiro, balcao, outro"]
+  valor decimal(12,2) [not null]
+  status enum [not null, default: "aprovado", note: "pendente, aprovado, recusado, cancelado"]
+  codigo_transacao varchar(120)
+  pago_em timestamp [not null]
+  atualizado_em timestamp [not null]
+}
+
+Table cobrancas_pix {
+  id bigint [pk, increment]
+  pedido_id bigint
+  venda_id bigint
+  chave_pix varchar(160) [not null]
+  payload text [not null]
+  valor decimal(12,2) [not null]
+  status enum [not null, default: "pendente", note: "pendente, pago, cancelado, expirado"]
+  criado_em timestamp [not null]
+  pago_em datetime
+  atualizado_em timestamp [not null]
+}
+
+Table compras {
+  id bigint [pk, increment]
+  fornecedor_id bigint [not null]
+  status enum [not null, default: "rascunho", note: "rascunho, enviado, recebido, cancelado"]
+  total decimal(12,2) [not null, default: 0]
+  observacoes text
+  criado_em timestamp [not null]
+  atualizado_em timestamp [not null]
+}
+
+Table itens_compra {
+  id bigint [pk, increment]
+  compra_id bigint [not null]
+  ingrediente_id bigint [not null]
+  quantidade decimal(12,3) [not null]
+  custo_unitario decimal(12,2) [not null, default: 0]
+  total decimal(12,2) [not null, default: 0]
+  criado_em timestamp [not null]
+  atualizado_em timestamp [not null]
+}
+
+Ref: ingredientes.unidade_id > unidades.id
+Ref: ingredientes.fornecedor_id > fornecedores.id
+Ref: produtos.categoria_id > categorias.id
+Ref: itens_receita.produto_id > produtos.id [delete: cascade]
+Ref: itens_receita.ingrediente_id > ingredientes.id
+Ref: lotes_estoque.ingrediente_id > ingredientes.id
+Ref: lotes_estoque.fornecedor_id > fornecedores.id
+Ref: movimentacoes_estoque.ingrediente_id > ingredientes.id
+Ref: movimentacoes_estoque.lote_id > lotes_estoque.id
+Ref: movimentacoes_estoque.criado_por > usuarios.id
+Ref: pedidos.mesa_id > mesas.id
+Ref: pedidos.criado_por > usuarios.id
+Ref: itens_pedido.pedido_id > pedidos.id [delete: cascade]
+Ref: itens_pedido.produto_id > produtos.id
+Ref: adicionais_item_pedido.item_pedido_id > itens_pedido.id [delete: cascade]
+Ref: caixas.aberto_por > usuarios.id
+Ref: caixas.fechado_por > usuarios.id
+Ref: vendas.pedido_id > pedidos.id
+Ref: vendas.caixa_id > caixas.id
+Ref: vendas.vendido_por > usuarios.id
+Ref: pagamentos.venda_id > vendas.id
+Ref: pagamentos.pedido_id > pedidos.id
+Ref: cobrancas_pix.pedido_id > pedidos.id
+Ref: cobrancas_pix.venda_id > vendas.id
+Ref: compras.fornecedor_id > fornecedores.id
+Ref: itens_compra.compra_id > compras.id [delete: cascade]
+Ref: itens_compra.ingrediente_id > ingredientes.id
