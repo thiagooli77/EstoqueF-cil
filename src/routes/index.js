@@ -5,6 +5,7 @@ const authRoutes = require('./authRoutes');
 const userRoutes = require('./userRoutes');
 const abacatePayRoutes = require('./abacatePayRoutes');
 const dashboardController = require('../controllers/dashboardController');
+const atendimentoRoutes = require('./atendimentoRoutes');
 
 const router = express.Router();
 
@@ -16,6 +17,7 @@ router.use('/auth', authRoutes);
 router.use('/autenticacao', authRoutes);
 router.use('/abacatepay', abacatePayRoutes);
 router.get('/dashboard/summary', dashboardController.summary);
+router.use('/atendimento', atendimentoRoutes);
 
 router.use('/usuarios', userRoutes);
 router.use('/unidades', crudRoutes(models.unidades));

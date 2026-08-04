@@ -7,7 +7,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const getAppData = () => {
         const data = localStorage.getItem('estoqueFacilData');
-        return data ? JSON.parse(data) : { orders: {}, tableStatuses: {}, suppliers: [], cart: [] };
+        const appData = data ? JSON.parse(data) : { orders: {}, suppliers: [], cart: [] };
+        if (Object.prototype.hasOwnProperty.call(appData, 'tableStatuses')) {
+            delete appData.tableStatuses;
+            localStorage.setItem('estoqueFacilData', JSON.stringify(appData));
+        }
+        return appData;
     };
     window.getAppData = getAppData;
 
@@ -25,6 +30,35 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         return data;
+    };
+
+    const updateTableStatusByNumber = async (tableNumber, status) => {
+        const tables = await requestJson('/api/mesas');
+        const table = tables.find(item => String(item.numero).padStart(2, '0') === String(tableNumber).padStart(2, '0'));
+        if (!table) throw new Error(`Mesa ${tableNumber} não encontrada.`);
+
+        return requestJson(`/api/mesas/${table.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status })
+        });
+    };
+
+    const migrateLocalOrdersToMysql = async () => {
+        const appData = getAppData();
+        const entries = Object.entries(appData.orders || {});
+        if (entries.length === 0) return;
+
+        for (const [tableNumber, order] of entries) {
+            if (!order?.items?.length) continue;
+            await requestJson(`/api/atendimento/mesas/${encodeURIComponent(tableNumber)}/pedido`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ items: order.items })
+            });
+        }
+        delete appData.orders;
+        saveAppData(appData);
     };
 
     const loadIngredientCatalog = async () => {
@@ -612,6 +646,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- LÓGICA DA PÁGINA DE ATENDIMENTO DE MESAS ---
     if (!!document.getElementById('tables-grid')) {
         const tablesGrid = document.getElementById('tables-grid');
+        const addTableBtn = document.getElementById('btnM');
         const tableOptionsModalElement = document.getElementById('table-options-modal');
         const tableOptionsModal = new Modal(tableOptionsModalElement);
         const modalTableNumber = document.getElementById('modal-table-number');
@@ -627,12 +662,45 @@ document.addEventListener('DOMContentLoaded', () => {
         
         let selectedTableNumber = null;
 
+        const createTableButton = (table) => {
+            const number = String(table.numero).padStart(2, '0');
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.dataset.tableId = table.id;
+            button.dataset.tableNumber = number;
+            button.dataset.status = table.status || 'disponivel';
+            button.className = 'table-button flex items-center justify-between p-4 h-24 bg-green-500 text-white rounded-lg shadow-lg hover:bg-green-600 transition-colors';
+            button.innerHTML = `
+                <div class="flex flex-col items-start">
+                    <span class="text-sm font-medium">MESA</span>
+                    <span class="text-4xl font-bold">${number}</span>
+                </div>
+                <span class="table-total text-xl font-semibold"></span>
+            `;
+            return button;
+        };
+
+        const loadTables = async () => {
+            await migrateLocalOrdersToMysql();
+            const [tables, openOrders] = await Promise.all([
+                requestJson('/api/mesas'),
+                requestJson('/api/atendimento/pedidos-abertos')
+            ]);
+            tablesGrid.replaceChildren(...tables
+                .sort((a, b) => Number(a.numero) - Number(b.numero))
+                .map(createTableButton));
+            openOrders.forEach(order => {
+                const number = String(order.mesa_numero).padStart(2, '0');
+                const button = tablesGrid.querySelector(`[data-table-number="${number}"]`);
+                if (button) button.dataset.orderTotal = Number(order.total || 0).toFixed(2);
+            });
+            updateTableDisplay();
+            return tables;
+        };
+
         const updateTableDisplay = () => {
-            const appData = getAppData();
             tablesGrid.querySelectorAll('.table-button').forEach(button => {
-                const number = button.dataset.tableNumber;
-                const status = appData.tableStatuses[number] || 'disponivel';
-                const orderData = appData.orders[number];
+                const status = button.dataset.status || 'disponivel';
                 const totalSpan = button.querySelector('.table-total');
                 
                 button.dataset.status = status;
@@ -645,18 +713,42 @@ document.addEventListener('DOMContentLoaded', () => {
                     default: button.classList.add('bg-green-500', 'hover:bg-green-600'); break;
                 }
 
-                if (orderData && orderData.items && orderData.items.length > 0) {
-                    let subtotal = 0;
-                    orderData.items.forEach(item => {
-                        subtotal += item.price * item.quantity;
-                    });
-                    const total = subtotal * 1.10;
-                    totalSpan.textContent = `R$ ${total.toFixed(2)}`;
-                } else {
-                    totalSpan.textContent = '';
-                }
+                totalSpan.textContent = button.dataset.orderTotal
+                    ? `R$ ${button.dataset.orderTotal.replace('.', ',')}`
+                    : '';
             });
         };
+
+        addTableBtn?.addEventListener('click', async () => {
+            addTableBtn.disabled = true;
+            const originalText = addTableBtn.textContent;
+            addTableBtn.textContent = 'Adicionando...';
+
+            try {
+                const tables = await requestJson('/api/mesas');
+                const usedNumbers = new Set(tables.map(table => Number(table.numero)));
+                let nextNumber = 1;
+                while (usedNumbers.has(nextNumber)) nextNumber += 1;
+
+                const table = await requestJson('/api/mesas', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        numero: String(nextNumber).padStart(2, '0'),
+                        status: 'disponivel',
+                        lugares: 4
+                    })
+                });
+
+                tablesGrid.appendChild(createTableButton(table));
+                updateTableDisplay();
+            } catch (error) {
+                alert(`Não foi possível adicionar a mesa: ${error.message}`);
+            } finally {
+                addTableBtn.disabled = false;
+                addTableBtn.textContent = originalText;
+            }
+        });
 
         tablesGrid.addEventListener('click', (event) => {
             const tableButton = event.target.closest('.table-button');
@@ -683,17 +775,18 @@ document.addEventListener('DOMContentLoaded', () => {
                         modalTableStatus.className = 'mb-4 text-lg font-medium text-gray-500';
                         break;
                 }
+                tableOptionsModal.show();
             }
         });
 
-        const redirectToOrderPage = () => {
+        const redirectToOrderPage = async () => {
              if (selectedTableNumber) {
-                const appData = getAppData();
-                if (!appData.tableStatuses[selectedTableNumber] || appData.tableStatuses[selectedTableNumber] === 'disponivel') {
-                    appData.tableStatuses[selectedTableNumber] = 'atendimento';
-                    saveAppData(appData);
+                try {
+                    await updateTableStatusByNumber(selectedTableNumber, 'atendimento');
+                    window.location.href = `atendimento_pedido.html?mesa=${selectedTableNumber}`;
+                } catch (error) {
+                    alert(`Não foi possível iniciar o pedido: ${error.message}`);
                 }
-                window.location.href = `atendimento_pedido.html?mesa=${selectedTableNumber}`;
             }
         }
 
@@ -709,21 +802,32 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         statusOptionButtons.forEach(button => {
-            button.addEventListener('click', () => {
+            button.addEventListener('click', async () => {
                 const newStatus = button.dataset.newStatus;
                 if (selectedTableNumber && newStatus) {
-                    const appData = getAppData();
-                    appData.tableStatuses[selectedTableNumber] = newStatus;
-                    if (newStatus === 'disponivel') {
-                        delete appData.orders[selectedTableNumber];
+                    try {
+                        const updatedTable = await updateTableStatusByNumber(selectedTableNumber, newStatus);
+                        const selectedButton = tablesGrid.querySelector(`[data-table-number="${selectedTableNumber}"]`);
+                        if (selectedButton) selectedButton.dataset.status = updatedTable.status;
+
+                        if (newStatus === 'disponivel') {
+                            const openOrder = await requestJson(`/api/atendimento/mesas/${encodeURIComponent(selectedTableNumber)}/pedido`);
+                            if (openOrder) {
+                                await requestJson(`/api/atendimento/mesas/${encodeURIComponent(selectedTableNumber)}/finalizar`, { method: 'POST' });
+                            }
+                        }
+                        updateTableDisplay();
+                        changeStatusModal.hide();
+                    } catch (error) {
+                        alert(`Não foi possível alterar o status: ${error.message}`);
                     }
-                    saveAppData(appData);
-                    updateTableDisplay();
-                    changeStatusModal.hide();
                 }
             });
         });
-        updateTableDisplay();
+        loadTables().catch(error => {
+            console.error('Erro ao carregar mesas:', error);
+            tablesGrid.innerHTML = '<p class="col-span-full text-center text-red-500">Não foi possível carregar as mesas.</p>';
+        });
     }
     
     // --- LÓGICA DA PÁGINA DE ATENDIMENTO DE PEDIDO (PDV) ---
@@ -743,9 +847,9 @@ document.addEventListener('DOMContentLoaded', () => {
             tableDisplay.textContent = `MESA ${tableNumber}`;
         }
 
+        let saveQueue = Promise.resolve();
         const saveOrder = () => {
             if (!tableNumber) return;
-            const appData = getAppData();
             const orderItems = [];
             orderItemsContainer.querySelectorAll('.order-item').forEach(itemEl => {
                 orderItems.push({
@@ -755,20 +859,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             });
 
-            const existingOrder = appData.orders[tableNumber];
-            const createdAt = (existingOrder && existingOrder.createdAt) ? existingOrder.createdAt : new Date().toISOString();
-
-            if (orderItems.length > 0) {
-                appData.orders[tableNumber] = { items: orderItems, createdAt: createdAt };
-                appData.tableStatuses[tableNumber] = 'atendimento';
-            } else {
-                delete appData.orders[tableNumber];
-                appData.tableStatuses[tableNumber] = 'disponivel';
-            }
-            saveAppData(appData);
+            saveQueue = saveQueue.then(() => requestJson(`/api/atendimento/mesas/${encodeURIComponent(tableNumber)}/pedido`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ items: orderItems })
+            })).catch(error => alert(`Não foi possível salvar o pedido: ${error.message}`));
         };
         
-        const updateTotals = () => {
+        const updateTotals = (persist = true) => {
             let subtotal = 0;
             orderItemsContainer.querySelectorAll('.order-item').forEach(item => {
                 subtotal += parseFloat(item.dataset.price) * parseInt(item.querySelector('.item-quantity').textContent);
@@ -779,7 +877,7 @@ document.addEventListener('DOMContentLoaded', () => {
             serviceChargeEl.textContent = `R$ ${serviceCharge.toFixed(2)}`;
             totalEl.textContent = `R$ ${total.toFixed(2)}`;
             emptyOrderMessage.classList.toggle('hidden', orderItemsContainer.children.length > 1);
-            saveOrder();
+            if (persist) saveOrder();
         };
 
         const createOrderItemElement = (name, price, quantity) => {
@@ -802,16 +900,16 @@ document.addEventListener('DOMContentLoaded', () => {
             orderItemsContainer.appendChild(orderItem);
         };
 
-        const loadOrder = () => {
+        const loadOrder = async () => {
             if (!tableNumber) return;
-            const appData = getAppData();
-            const savedOrderData = appData.orders[tableNumber];
+            await migrateLocalOrdersToMysql();
+            const savedOrderData = await requestJson(`/api/atendimento/mesas/${encodeURIComponent(tableNumber)}/pedido`);
             orderItemsContainer.innerHTML = '';
             orderItemsContainer.appendChild(emptyOrderMessage);
             if (savedOrderData && savedOrderData.items && savedOrderData.items.length > 0) {
-                savedOrderData.items.forEach(item => createOrderItemElement(item.name, item.price, item.quantity));
+                savedOrderData.items.forEach(item => createOrderItemElement(item.nome, Number(item.preco_unitario), item.quantidade));
             }
-            updateTotals();
+            updateTotals(false);
         };
 
         menuItemsContainer.addEventListener('click', (event) => {
@@ -855,7 +953,7 @@ document.addEventListener('DOMContentLoaded', () => {
             window.location.href = 'atendimento_mesas.html';
         });
 
-        loadOrder();
+        loadOrder().catch(error => alert(`Não foi possível carregar o pedido: ${error.message}`));
     }
 
     // --- LÓGICA DA PÁGINA PDV ---
@@ -872,10 +970,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const finalizeOrderModal = new Modal(finalizeOrderModalElement);
         
         let currentTableNumber = null;
+        let openOrdersByTable = new Map();
 
-        const populateTableSelect = () => {
-            const appData = getAppData();
-            const tablesInService = Object.keys(appData.orders);
+        const populateTableSelect = async () => {
+            await migrateLocalOrdersToMysql();
+            const orders = await requestJson('/api/atendimento/pedidos-abertos');
+            openOrdersByTable = new Map(orders.map(order => [String(order.mesa_numero).padStart(2, '0'), order]));
+            const tablesInService = [...openOrdersByTable.keys()];
 
             tableSelect.innerHTML = '<option selected disabled>Escolha uma mesa</option>';
 
@@ -908,15 +1009,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const loadOrderForTable = (tableNumber) => {
             currentTableNumber = tableNumber;
-            const appData = getAppData();
-            const orderData = appData.orders[tableNumber];
+            const orderData = openOrdersByTable.get(String(tableNumber).padStart(2, '0'));
             
             orderItemsContainer.innerHTML = ''; 
 
             if (orderData && orderData.items && orderData.items.length > 0) {
                 emptyOrderMessage.classList.add('hidden');
                 orderData.items.forEach(item => {
-                    createOrderItemElement(item.name, item.price, item.quantity);
+                    createOrderItemElement(item.nome, Number(item.preco_unitario), item.quantidade);
                 });
                 finalizeOrderBtn.disabled = false;
             } else {
@@ -944,20 +1044,22 @@ document.addEventListener('DOMContentLoaded', () => {
             loadOrderForTable(tableSelect.value);
         });
 
-        finalizeOrderModalElement.addEventListener('click', (event) => {
+        finalizeOrderModalElement.addEventListener('click', async (event) => {
             const paymentButton = event.target.closest('.payment-method-btn');
             if (paymentButton) {
                 const method = paymentButton.dataset.method;
                 
-                const appData = getAppData();
-                delete appData.orders[currentTableNumber];
-                appData.tableStatuses[currentTableNumber] = 'disponivel';
-                saveAppData(appData);
+                try {
+                    await requestJson(`/api/atendimento/mesas/${encodeURIComponent(currentTableNumber)}/finalizar`, { method: 'POST' });
+                } catch (error) {
+                    alert(`Pagamento confirmado, mas não foi possível liberar a mesa: ${error.message}`);
+                    return;
+                }
 
                 finalizeOrderModal.hide();
                 alert(`Pagamento com ${method} confirmado! Mesa ${currentTableNumber} liberada.`);
 
-                populateTableSelect();
+                await populateTableSelect();
                 orderItemsContainer.innerHTML = '';
                 orderItemsContainer.appendChild(emptyOrderMessage);
                 emptyOrderMessage.textContent = 'Selecione uma mesa para ver o pedido.';
@@ -967,7 +1069,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        populateTableSelect();
+        populateTableSelect().catch(error => alert(`Não foi possível carregar os pedidos: ${error.message}`));
     }
 
     // --- LÓGICA DA PÁGINA PAINEL DA COZINHA ---
@@ -985,16 +1087,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const createOrderCard = (tableNumber, orderData) => {
             const itemsHtml = orderData.items.map(item => `
                 <li class="text-sm text-gray-600 dark:text-gray-400">
-                    <span class="font-semibold">${item.quantity}x</span> ${item.name}
+                    <span class="font-semibold">${item.quantidade ?? item.quantity}x</span> ${item.nome ?? item.name}
                 </li>
             `).join('');
             
-            const createdAt = new Date(orderData.createdAt);
+            const createdAt = new Date(orderData.criado_em ?? orderData.createdAt);
             const formattedTime = createdAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
             const card = document.createElement('div');
             card.className = 'order-card bg-white dark:bg-gray-700 p-4 rounded-lg shadow-md';
             card.setAttribute('data-table', tableNumber);
+            card.setAttribute('data-order-id', orderData.id);
             card.innerHTML = `
                 <div class="flex justify-between items-start mb-2">
                     <h3 class="font-bold text-lg text-gray-800 dark:text-white">Mesa ${tableNumber}</h3>
@@ -1062,17 +1165,17 @@ document.addEventListener('DOMContentLoaded', () => {
              completedCount.textContent = completedColumn.children.length;
         };
         
-        const loadOrders = () => {
-            const appData = getAppData();
-            const hasSavedOrders = Object.keys(appData.orders).length > 0;
+        const loadOrders = async () => {
+            await migrateLocalOrdersToMysql();
+            const orders = await requestJson('/api/atendimento/pedidos-abertos');
 
-            if (hasSavedOrders) {
+            if (orders.length > 0) {
                 receivedColumn.innerHTML = '';
                 inProgressColumn.innerHTML = '';
                 completedColumn.innerHTML = '';
 
-                for (const tableNumber in appData.orders) {
-                    const orderData = appData.orders[tableNumber];
+                for (const orderData of orders) {
+                    const tableNumber = String(orderData.mesa_numero).padStart(2, '0');
                     if (orderData && orderData.items.length > 0) {
                         const card = createOrderCard(tableNumber, orderData);
                         updateCardStatus(card, 'recebido');
@@ -1109,7 +1212,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        loadOrders();
+        loadOrders().catch(error => alert(`Não foi possível carregar a cozinha: ${error.message}`));
     }
 
     // --- LÓGICA DE LOGIN ---
