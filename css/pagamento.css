@@ -1,20 +1,20 @@
 :root {
-    --checkout-orange: #fd6306;
-    --checkout-orange-dark: #d94f00;
-    --checkout-orange-soft: #fff3eb;
-    --checkout-ink: #1f2937;
-    --checkout-muted: #6b7280;
-    --checkout-line: #ead8cc;
+    --checkout-orange: #c2410c;
+    --checkout-orange-dark: #9a3412;
+    --checkout-orange-soft: #fff7ed;
+    --checkout-ink: #1e293b;
+    --checkout-muted: #64748b;
+    --checkout-line: #e2e8f0;
 }
 
 body {
     font-family: 'Inter', sans-serif;
-    background: #fff7f0;
+    background: #f8fafc;
     color: var(--checkout-ink);
 }
 
 .checkout-header {
-    background: linear-gradient(90deg, #ffbf94, #ff960d, #ff6905);
+    background: linear-gradient(90deg, #9a3412, #c2410c, #ea580c);
 }
 
 .checkout-shell {

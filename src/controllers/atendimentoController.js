@@ -63,10 +63,26 @@ exports.syncByTable = async (req, res, next) => {
     }
 
     const items = Array.isArray(req.body.items) ? req.body.items : [];
+    const currentOrder = await findOpenOrder(connection, req.params.numero);
+
+    if (items.length === 0) {
+      if (currentOrder) {
+        await connection.execute('DELETE FROM itens_pedido WHERE pedido_id = ?', [currentOrder.id]);
+        await connection.execute(
+          "UPDATE pedidos SET status = 'cancelado', subtotal = 0, taxa_atendimento = 0, total = 0, fechado_em = NOW() WHERE id = ?",
+          [currentOrder.id]
+        );
+      }
+
+      await connection.execute("UPDATE mesas SET status = 'disponivel' WHERE id = ?", [tables[0].id]);
+      await connection.commit();
+      return res.json(null);
+    }
+
     const subtotal = items.reduce((sum, item) => sum + (Number(item.price ?? item.preco_unitario) * Number(item.quantity ?? item.quantidade)), 0);
     const serviceCharge = subtotal * 0.10;
     const total = subtotal + serviceCharge;
-    let order = await findOpenOrder(connection, req.params.numero);
+    let order = currentOrder;
 
     if (!order) {
       const [created] = await connection.execute(

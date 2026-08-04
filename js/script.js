@@ -669,7 +669,7 @@ document.addEventListener('DOMContentLoaded', () => {
             button.dataset.tableId = table.id;
             button.dataset.tableNumber = number;
             button.dataset.status = table.status || 'disponivel';
-            button.className = 'table-button flex items-center justify-between p-4 h-24 bg-green-500 text-white rounded-lg shadow-lg hover:bg-green-600 transition-colors';
+            button.className = 'table-button flex items-center justify-between p-4 h-24 bg-green-700 text-white rounded-lg shadow-lg hover:bg-green-800 transition-colors';
             button.innerHTML = `
                 <div class="flex flex-col items-start">
                     <span class="text-sm font-medium">MESA</span>
@@ -704,13 +704,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 const totalSpan = button.querySelector('.table-total');
                 
                 button.dataset.status = status;
-                button.classList.remove('bg-green-500', 'hover:bg-green-600', 'bg-orange-500', 'hover:bg-orange-600', 'bg-red-500', 'hover:bg-red-600', 'bg-gray-600', 'hover:bg-gray-700');
+                button.classList.remove('bg-green-700', 'hover:bg-green-800', 'bg-orange-700', 'hover:bg-orange-800', 'bg-blue-700', 'hover:bg-blue-800', 'bg-slate-600', 'hover:bg-slate-700');
 
                 switch(status) {
-                    case 'atendimento': button.classList.add('bg-orange-500', 'hover:bg-orange-600'); break;
-                    case 'reserva': button.classList.add('bg-red-500', 'hover:bg-red-600'); break;
-                    case 'indisponivel': button.classList.add('bg-gray-600', 'hover:bg-gray-700'); break;
-                    default: button.classList.add('bg-green-500', 'hover:bg-green-600'); break;
+                    case 'atendimento': button.classList.add('bg-orange-700', 'hover:bg-orange-800'); break;
+                    case 'reserva': button.classList.add('bg-blue-700', 'hover:bg-blue-800'); break;
+                    case 'indisponivel': button.classList.add('bg-slate-600', 'hover:bg-slate-700'); break;
+                    default: button.classList.add('bg-green-700', 'hover:bg-green-800'); break;
                 }
 
                 totalSpan.textContent = button.dataset.orderTotal
@@ -762,12 +762,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 switch(tableStatus) {
                     case 'disponivel':
                         modalTableStatus.textContent = 'Disponível';
-                        modalTableStatus.className = 'mb-4 text-lg font-medium text-green-500';
+                        modalTableStatus.className = 'mb-4 text-lg font-medium text-green-700';
                         modalStartOrderBtn.classList.remove('hidden');
                         break;
                     case 'atendimento':
                         modalTableStatus.textContent = 'Em Atendimento';
-                        modalTableStatus.className = 'mb-4 text-lg font-medium text-orange-500';
+                        modalTableStatus.className = 'mb-4 text-lg font-medium text-orange-700';
                         modalEditOrderBtn.classList.remove('hidden');
                         break;
                     default:
@@ -779,16 +779,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        const redirectToOrderPage = async () => {
-             if (selectedTableNumber) {
-                try {
-                    await updateTableStatusByNumber(selectedTableNumber, 'atendimento');
-                    window.location.href = `atendimento_pedido.html?mesa=${selectedTableNumber}`;
-                } catch (error) {
-                    alert(`Não foi possível iniciar o pedido: ${error.message}`);
-                }
+        const redirectToOrderPage = () => {
+            if (selectedTableNumber) {
+                // Abrir a tela não ocupa a mesa. O servidor altera o status para
+                // "atendimento" somente quando o primeiro item é salvo.
+                window.location.href = `atendimento_pedido.html?mesa=${selectedTableNumber}`;
             }
-        }
+        };
 
         modalStartOrderBtn.addEventListener('click', redirectToOrderPage);
         modalEditOrderBtn.addEventListener('click', redirectToOrderPage);
@@ -948,8 +945,9 @@ document.addEventListener('DOMContentLoaded', () => {
             updateTotals();
         });
         
-        finalizeOrderBtn.addEventListener('click', () => {
-            // Apenas salva o estado atual (o que já é feito em updateTotals) e volta para a tela de mesas.
+        finalizeOrderBtn.addEventListener('click', async () => {
+            // Aguarda a última persistência antes de voltar para a lista de mesas.
+            await saveQueue;
             window.location.href = 'atendimento_mesas.html';
         });
 
@@ -1130,11 +1128,11 @@ document.addEventListener('DOMContentLoaded', () => {
             switch(newStatus) {
                 case 'recebido':
                     statusBadge.textContent = 'Recebido';
-                    statusBadge.className = 'status-badge bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded';
+                    statusBadge.className = 'status-badge bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded';
                     break;
                 case 'andamento':
                     statusBadge.textContent = 'Em Andamento';
-                    statusBadge.className = 'status-badge bg-yellow-100 text-yellow-800 text-xs font-medium px-2.5 py-0.5 rounded';
+                    statusBadge.className = 'status-badge bg-amber-100 text-amber-800 text-xs font-medium px-2.5 py-0.5 rounded';
                     const startTime = Date.now();
                     card.dataset.startTime = startTime;
                     timers[tableNumber] = setInterval(() => {

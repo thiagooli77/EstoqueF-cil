@@ -1,6 +1,20 @@
 /* Estilos para a barra lateral e transição do conteúdo */
 :root {
     --font-family-base: 'Inter', sans-serif;
+    --color-primary: #c2410c;
+    --color-primary-hover: #9a3412;
+    --color-primary-soft: #fff7ed;
+    --color-accent: #f59e0b;
+    --color-text: #1e293b;
+    --color-muted: #64748b;
+    --color-page: #f8fafc;
+    --color-card: #ffffff;
+    --color-border: #e2e8f0;
+    --color-success: #15803d;
+    --color-info: #1d4ed8;
+    --color-warning: #b45309;
+    --color-danger: #b91c1c;
+    --color-unavailable: #475569;
 }
 
 :root {
@@ -12,7 +26,8 @@
 body {
     font-family: var(--font-family-base);
     overflow-x: hidden; /* evita barra de rolagem horizontal quando sidebar abre/fecha */
-    background: linear-gradient(135deg, #ff8a3d, #ff6a00, #e65c00);
+    color: var(--color-text);
+    background: linear-gradient(135deg, #fff7ed 0%, var(--color-page) 45%, #f1f5f9 100%);
 }
 
 /* Controle via classes: */
@@ -30,6 +45,37 @@ body.sidebar-expanded #main-content {
     transition: width 0.3s ease-in-out;
     overflow-x: hidden; /* garante que conteúdo interno não provoque overflow horizontal */
     box-sizing: border-box;
+    background: linear-gradient(180deg, var(--color-primary), var(--color-primary-hover)) !important;
+    box-shadow: 8px 0 24px rgba(30, 41, 59, 0.12);
+}
+
+header[class*="bg-white"] {
+    background-color: rgba(255, 255, 255, 0.94) !important;
+    border-bottom: 1px solid var(--color-border);
+    box-shadow: 0 4px 18px rgba(30, 41, 59, 0.08) !important;
+}
+
+main [class~="bg-white/80"] {
+    background-color: rgba(255, 255, 255, 0.94) !important;
+    border: 1px solid var(--color-border);
+}
+
+.item-menu:hover,
+.sidebar a:hover {
+    background-color: var(--color-primary-hover) !important;
+}
+
+.item-menu.bg-orange-700 {
+    background-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    outline: 3px solid rgba(245, 158, 11, 0.45);
+    outline-offset: 2px;
 }
 
 .sidebar.expanded {
@@ -73,19 +119,19 @@ body.sidebar-expanded #main-content {
     gap: 5px;
     justify-content: space-evenly;
     font-weight: bold;
-    background-color: rgba(0, 0, 0, 0.63);
+    background-color: var(--color-primary);
     color: white;
     border-radius: 8px;
     padding: 10px;
     border: 1px transparent;
-    box-shadow: 1px 3px 5px 2px rgba(214, 214, 214, 0.349);
+    box-shadow: 0 6px 16px rgba(154, 52, 18, 0.18);
     margin-bottom: 10px;
 }
 
 .addM:hover{
     cursor: pointer;
-    background-color: aliceblue;
-    color: black;
+    background-color: var(--color-primary-hover);
+    color: white;
     transition: 0.2s;
 }
 
@@ -108,4 +154,17 @@ body.sidebar-expanded #main-content {
 .cx-obs{
     border-radius: 8px;
     height: 120px;
+}
+
+@media (prefers-color-scheme: dark) {
+    body {
+        color: #e2e8f0;
+        background: #0f172a;
+    }
+
+    header[class*="dark:bg-gray-800"],
+    main [class~="dark:bg-gray-800/80"] {
+        background-color: rgba(30, 41, 59, 0.96) !important;
+        border-color: #334155;
+    }
 }
